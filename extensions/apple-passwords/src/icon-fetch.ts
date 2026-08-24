@@ -1,17 +1,6 @@
-import { showToast, Toast } from "@raycast/api";
-import { indexedDomains } from "./utils";
 import psl from "psl";
-import { cacheIcon, knownMisses, missingIcons } from "./browser-data";
+import { cacheIcon } from "./browser-data";
 
-const CONCURRENCY = 6;
-
-/**
- * Raycast stops a background command that runs too long, and a large vault can
- * leave a hundred sites to probe at several seconds each. Bounding the batch
- * means a run always finishes and reports honestly; running it again picks up
- * where it left off.
- */
-const MAX_PER_RUN = 30;
 const TIMEOUT_MS = 5000;
 // Multi-resolution .ico files are routinely larger than they look: a 200 KB cap
 // rejected real icons at 285 KB. Still bounded, because these are embedded as
@@ -93,61 +82,33 @@ async function iconFromPage(domain: string): Promise<string | undefined> {
  * A service would learn every domain the user holds an account for; asking a
  * site for its own icon tells it nothing ordinary browsing would not.
  */
-async function fetchIcon(domain: string): Promise<string | undefined> {
-  return (await asDataUri(`https://${domain}/favicon.ico`)) ?? (await iconFromPage(domain));
+export async function fetchIcon(domain: string): Promise<string | undefined> {
+  const direct = (await asDataUri(`https://${domain}/favicon.ico`)) ?? (await iconFromPage(domain));
+  if (direct) return direct;
+
+  // A login host often serves no icon of its own while the site root does, so
+  // fall back to the registrable domain — the same brand, not a sibling
+  // service, which is what made borrowing wrong in the first place.
+  const parsed = psl.parse(domain) as { domain?: string | null };
+  const apex = parsed.domain?.toLowerCase();
+  if (!apex || apex === domain) return undefined;
+  return (await asDataUri(`https://${apex}/favicon.ico`)) ?? (await iconFromPage(apex));
 }
 
-export default async function Command() {
-  const known = indexedDomains();
-  if (!known.length) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Nothing to fetch yet",
-      message: "Search for a few sites first, then run this again.",
-    });
-    return;
-  }
-
-  // Credentials are stored against app identifiers too ("telegram.messenger"),
-  // which are not hostnames and would each burn a connection timeout.
-  const outstanding = (await missingIcons(known)).filter((d) => psl.isValid(d));
-  const domains = outstanding.slice(0, MAX_PER_RUN);
-  const remaining = outstanding.length - domains.length;
-  if (!domains.length) {
-    // "Nothing to fetch" is not the same as "everything has an icon": a site
-    // that was checked and had none stays blank until it is worth retrying.
-    const misses = knownMisses(known);
-    await showToast({
-      style: Toast.Style.Success,
-      title: misses
-        ? `Nothing left to fetch — ${misses} site${misses === 1 ? " has" : "s have"} no icon`
-        : "Every known site has an icon",
-    });
-    return;
-  }
-
-  const toast = await showToast({
-    style: Toast.Style.Animated,
-    title: `Fetching ${domains.length} icon${domains.length === 1 ? "" : "s"}…`,
-  });
-
-  let cursor = 0;
-  let found = 0;
+/**
+ * Fetch icons for hosts that have none, recording misses so a dead end is not
+ * re-probed. Bounded by the caller to what is on screen.
+ */
+export async function fetchMissing(hosts: string[]): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
   await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, domains.length) }, async () => {
-      while (cursor < domains.length) {
-        const domain = domains[cursor++];
-        const icon = await fetchIcon(domain);
-        // Record misses too, as an empty entry, so a site with no reachable icon
-        // is not re-probed on every run.
-        cacheIcon(domain, icon ?? "");
-        if (icon) found++;
-      }
-    }),
+    hosts
+      .filter((h) => psl.isValid(h))
+      .map(async (host) => {
+        const icon = await fetchIcon(host).catch(() => undefined);
+        cacheIcon(host, icon ?? "");
+        if (icon) found.set(host, icon);
+      }),
   );
-
-  toast.style = found ? Toast.Style.Success : Toast.Style.Failure;
-  toast.title = `${found} of ${domains.length} icon${domains.length === 1 ? "" : "s"} fetched`;
-  if (remaining > 0) toast.message = `${remaining} more to go — run this again`;
-  if (!found && lastError) toast.message = lastError;
+  return found;
 }

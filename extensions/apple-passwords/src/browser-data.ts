@@ -110,12 +110,11 @@ function readFetched(key: string): { uri: string; at: number } | undefined {
 }
 
 /**
- * The fetch command's work list: sites with no icon at all, plus fetched ones
- * old enough to be worth rechecking. Icons the browser supplied are left out —
- * the browser refreshes those itself as you visit.
+ * Of these hosts, the ones worth asking the network about: no icon at all, or a
+ * miss old enough to be worth another look. A found icon is left alone for far
+ * longer than a miss, which has nothing on screen in the meantime.
  */
-export async function missingIcons(domains: string[]): Promise<string[]> {
-  await favicons(domains);
+export function needsFetching(domains: string[]): string[] {
   return domains.filter((domain) => {
     const key = domain.toLowerCase();
     if (iconCache.has(key)) return false;
@@ -125,14 +124,6 @@ export async function missingIcons(domains: string[]): Promise<string[]> {
     const age = Date.now() - fetched.at;
     return fetched.uri ? age > REFRESH_AFTER_MS : age > RETRY_MISS_AFTER_MS;
   });
-}
-
-/** How many of these have no icon at all, having been looked for and missed. */
-export function knownMisses(domains: string[]): number {
-  return domains.filter((domain) => {
-    const key = domain.toLowerCase();
-    return !iconCache.has(key) && readFetched(key)?.uri === "";
-  }).length;
 }
 
 /** hostname and registrable domain -> icon id. Ids only; blobs on demand. */

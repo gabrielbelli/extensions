@@ -15,7 +15,8 @@ import {
   Toast,
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
-import { favicons } from "./browser-data";
+import { favicons, needsFetching } from "./browser-data";
+import { fetchMissing } from "./icon-fetch";
 import {
   APWEntry,
   APWIndexEntry,
@@ -133,7 +134,19 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
     if (!wanted.length) return;
     let active = true;
     favicons(wanted)
-      .then((found) => active && found.size && setIcons((prev) => new Map([...prev, ...found])))
+      .then(async (found) => {
+        if (!active) return;
+        if (found.size) setIcons((prev) => new Map([...prev, ...found]));
+
+        // Whatever the browser has no icon for is fetched here, for these rows
+        // only. Doing it as you look at a result keeps it to a handful of
+        // requests instead of probing the whole vault, and means there is
+        // nothing to run by hand.
+        const gaps = needsFetching(wanted.filter((host) => !found.has(host)));
+        if (!gaps.length) return;
+        const fetched = await fetchMissing(gaps).catch(() => new Map<string, string>());
+        if (active && fetched.size) setIcons((prev) => new Map([...prev, ...fetched]));
+      })
       .catch(() => {});
     return () => {
       active = false;

@@ -62,20 +62,6 @@
         "pair"
       ],
       "mode": "view"
-    },
-    {
-      "name": "fetch-icons",
-      "title": "Fetch Missing Icons",
-      "description": "Download icons for sites the browser has no cached favicon for. Contacts each site directly; run it only if you want that.",
-      "keywords": [
-        "ap",
-        "apw",
-        "apple",
-        "password",
-        "icon",
-        "favicon"
-      ],
-      "mode": "no-view"
     }
   ],
   "preferences": [
