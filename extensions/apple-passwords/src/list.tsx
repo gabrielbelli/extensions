@@ -183,20 +183,25 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
 
     const loadData = async () => {
       let targetUrl = url;
-      setLoading(true);
+      let fromActiveTab = false;
+
       if (!targetUrl) {
         if (autoDetectDone.current) return;
-        targetUrl = await getActiveURL();
         autoDetectDone.current = true;
+        targetUrl = await getActiveURL();
         if (!active || !targetUrl) return;
+        fromActiveTab = true;
       }
 
+      setLoading(true);
       try {
         const data = await searchAPWEntries(targetUrl);
-        if (active) {
-          setSearchTxt(targetUrl);
-          setData(data);
-        }
+        if (!active) return;
+        // Only fill the field from the active tab. Writing the query back while
+        // someone is typing loses keystrokes: a lookup started one character
+        // ago lands and snaps the field to what it searched for.
+        if (fromActiveTab) setSearchTxt(targetUrl);
+        setData(data);
       } catch (error) {
         if (!active) return;
         setData([]);
