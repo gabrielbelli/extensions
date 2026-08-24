@@ -1,5 +1,14 @@
 # Apple Passwords Changelog
 
+## [Shorthand Search, Account Search and Local Icons] - {PR_MERGE_DATE}
+
+- Search by a plain word (`github`, `grafana`) instead of a full domain
+- Naming a host by its leading label returns that host, not every service sharing its registrable domain
+- An `@` anywhere in the query searches usernames; a leading `@` lists accounts on that address domain
+- Results show each site's own icon, read from the browser's local favicon cache
+- Added **Fetch Missing Icons**, an opt-in command that downloads icons from each site directly
+- The APW binary is found on Intel Homebrew paths and on `PATH`, not only Apple Silicon
+
 ## [Updated] - 2026-08-21
 
 - Updated extension to meet Raycast extension development criteria

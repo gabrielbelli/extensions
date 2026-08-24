@@ -39,7 +39,14 @@
       "name": "save",
       "title": "Save Apple Password",
       "description": "Save a new or updated password to Apple Passwords.",
-      "keywords": ["ap", "apw", "apple", "password", "save", "new"],
+      "keywords": [
+        "ap",
+        "apw",
+        "apple",
+        "password",
+        "save",
+        "new"
+      ],
       "mode": "view"
     },
     {
@@ -55,11 +62,24 @@
         "pair"
       ],
       "mode": "view"
+    },
+    {
+      "name": "fetch-icons",
+      "title": "Fetch Missing Icons",
+      "description": "Download icons for sites the browser has no cached favicon for. Contacts each site directly; run it only if you want that.",
+      "keywords": [
+        "ap",
+        "apw",
+        "apple",
+        "password",
+        "icon",
+        "favicon"
+      ],
+      "mode": "no-view"
     }
   ],
   "preferences": [
     {
-      "default": "/opt/homebrew/bin/apw",
       "description": "Enter the APW binary path",
       "name": "cliPathAPW",
       "placeholder": "e.g., /usr/local/bin/apw",

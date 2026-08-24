@@ -6,6 +6,7 @@ import {
   getFrontmostApplication,
   Icon,
   LaunchProps,
+  Image,
   LaunchType,
   List,
   launchCommand,
@@ -14,14 +15,13 @@ import {
   Toast,
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
-import psl from "psl";
+import { favicons } from "./browser-data";
 import {
   APWEntry,
   APWIndexEntry,
   getActiveURL,
   getAPWEntry,
-  incrementHits,
-  listAPWEntries,
+  searchAPWEntries,
   PREFERENCES,
   searchIndex,
 } from "./utils";
@@ -59,7 +59,6 @@ const renderAction = (
           await Clipboard.paste(value);
         }
         showHUD(hudText);
-        incrementHits(domain, username);
       } else {
         showToast({ style: Toast.Style.Failure, title: "No value found" });
       }
@@ -83,7 +82,11 @@ const renderAction = (
   );
 };
 
-const renderItem = (entry: APWEntry, pasteTarget?: string, index = 0) => {
+/** The hostname a row represents, which is what its icon should reflect. */
+const iconKey = (entry: { domain: string; sites?: string[] }): string =>
+  (entry.sites?.find((s) => s && !s.includes(":")) ?? entry.domain ?? "").toLowerCase();
+
+const renderItem = (entry: APWEntry, pasteTarget?: string, index = 0, icon: Image.ImageLike = Icon.PersonCircle) => {
   const accessories = [];
   const actions = [];
   actions.push(renderAction("usr", entry.domain, entry.username, pasteTarget));
@@ -94,13 +97,14 @@ const renderItem = (entry: APWEntry, pasteTarget?: string, index = 0) => {
   }
   accessories.push({ icon: { source: Icon.Key, tintColor: Color.Blue } });
   const title = entry.title ?? entry.username;
-  const subtitle = entry.title ? `${entry.username} · ${entry.domain}` : entry.domain;
+  const site = entry.highLevelDomain ?? entry.domain;
+  const subtitle = entry.title ? `${entry.username} · ${site}` : site;
   return (
     <List.Item
       key={`item-${index}`}
       title={title}
       subtitle={subtitle}
-      icon={Icon.PersonCircle}
+      icon={icon}
       actions={<ActionPanel children={actions} />}
       accessories={accessories}
     />
@@ -113,6 +117,8 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
   const [data, setData] = useState<APWEntry[]>([]);
   const [indexResults, setIndexResults] = useState<APWIndexEntry[]>([]);
   const [pasteTarget, setPasteTarget] = useState<string | undefined>();
+  const [icons, setIcons] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(false);
   const autoDetectDone = useRef(!!props.arguments.url);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -123,18 +129,35 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
       .catch(() => {});
   }, []);
 
+  // Icons come from the browser's own favicon cache. Asking a favicon service
+  // instead would disclose the user's account list to a third party.
+  useEffect(() => {
+    const wanted = [...new Set([...data.map(iconKey), ...indexResults.map(iconKey)])].filter(Boolean);
+    if (!wanted.length) return;
+    let active = true;
+    favicons(wanted)
+      .then((found) => active && found.size && setIcons((prev) => new Map([...prev, ...found])))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [data, indexResults]);
+
+  const iconFor = (entry: { domain: string; sites?: string[] }, fallback: Image.ImageLike): Image.ImageLike => {
+    const uri = icons.get(iconKey(entry));
+    return uri ? { source: uri } : fallback;
+  };
+
   const handleSearchTextChange = (text: string) => {
-    const parsed = psl.parse(text);
-    const domain = "error" in parsed ? null : parsed.domain;
-    if (!domain) {
-      if (!text.trim()) return;
-      setUrl("");
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setIndexResults([]);
       setData([]);
-      setIndexResults(searchIndex(text.trim()));
+      setUrl("");
       return;
     }
-    setIndexResults(searchIndex(text.trim()));
-    setUrl(domain);
+    setIndexResults(searchIndex(trimmed));
+    setUrl(trimmed);
   };
 
   const handleDebouncedSearchTextChange = (text: string) => {
@@ -150,6 +173,7 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
 
     const loadData = async () => {
       let targetUrl = url;
+      setLoading(true);
       if (!targetUrl) {
         if (autoDetectDone.current) return;
         targetUrl = await getActiveURL();
@@ -158,13 +182,14 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
       }
 
       try {
-        const data = await listAPWEntries(targetUrl);
+        const data = await searchAPWEntries(targetUrl);
         if (active) {
           setSearchTxt(targetUrl);
           setData(data);
         }
       } catch (error) {
         if (!active) return;
+        setData([]);
         if ((error as { apwStatus?: number }).apwStatus === 9) {
           await launchCommand({ name: "auth", type: LaunchType.UserInitiated, context: { returnUrl: targetUrl } });
           return;
@@ -174,6 +199,8 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
           title: "APW Error",
           message: error instanceof Error ? error.message : "Unknown error",
         });
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
@@ -183,16 +210,21 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
     };
   }, [url]);
   return (
-    <List searchText={searchTxt} onSearchTextChange={handleDebouncedSearchTextChange} filtering={false}>
-      {data.map((entry, i) => renderItem(entry, pasteTarget, i))}
+    <List
+      isLoading={loading}
+      searchText={searchTxt}
+      onSearchTextChange={handleDebouncedSearchTextChange}
+      filtering={false}
+    >
+      {data.map((entry, i) => renderItem(entry, pasteTarget, i, iconFor(entry, Icon.PersonCircle)))}
       {data.length === 0 && indexResults.length > 0 && (
-        <List.Section title="Suggestions">
+        <List.Section title="Seen before">
           {indexResults.map((e, i) => (
             <List.Item
               key={`idx-${i}`}
               title={e.title ?? e.username}
               subtitle={e.title ? `${e.username} · ${e.domain}` : e.domain}
-              icon={Icon.MagnifyingGlass}
+              icon={iconFor(e, Icon.MagnifyingGlass)}
               accessories={[
                 ...(e.hasOtp ? [{ tag: { value: "OTP", color: Color.Green } }] : []),
                 { icon: { source: Icon.Key, tintColor: Color.Blue } },
@@ -213,6 +245,9 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
             />
           ))}
         </List.Section>
+      )}
+      {!loading && searchTxt.trim() !== "" && data.length === 0 && indexResults.length === 0 && (
+        <List.EmptyView icon={Icon.QuestionMark} title={`No saved password for ${searchTxt.trim()}`} />
       )}
     </List>
   );
