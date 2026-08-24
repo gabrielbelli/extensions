@@ -1,11 +1,14 @@
 import { showToast, Toast } from "@raycast/api";
 import { indexedDomains } from "./utils";
 import psl from "psl";
-import { cacheIcon, missingIcons } from "./browser-data";
+import { cacheIcon, knownMisses, missingIcons } from "./browser-data";
 
 const CONCURRENCY = 6;
 const TIMEOUT_MS = 5000;
-const MAX_BYTES = 200 * 1024;
+// Multi-resolution .ico files are routinely larger than they look: a 200 KB cap
+// rejected real icons at 285 KB. Still bounded, because these are embedded as
+// data URIs in a cache.
+const MAX_BYTES = 400 * 1024;
 const MAX_HTML = 200 * 1024;
 
 const ICON_LINK = /<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]*>/gi;
@@ -91,7 +94,15 @@ export default async function Command() {
   // which are not hostnames and would each burn a connection timeout.
   const domains = (await missingIcons(known)).filter((d) => psl.isValid(d));
   if (!domains.length) {
-    await showToast({ style: Toast.Style.Success, title: "Every known site already has an icon" });
+    // "Nothing to fetch" is not the same as "everything has an icon": a site
+    // that was checked and had none stays blank until it is worth retrying.
+    const misses = knownMisses(known);
+    await showToast({
+      style: Toast.Style.Success,
+      title: misses
+        ? `Nothing left to fetch — ${misses} site${misses === 1 ? " has" : "s have"} no icon`
+        : "Every known site has an icon",
+    });
     return;
   }
 

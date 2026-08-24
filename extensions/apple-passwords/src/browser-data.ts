@@ -86,6 +86,13 @@ const fetchedIcons = new Cache({ namespace: "icons" });
 /** Sites rebrand, so a fetched icon is due for another look eventually. */
 const REFRESH_AFTER_MS = 1000 * 60 * 60 * 24 * 90;
 
+/**
+ * A miss is retried far sooner than a hit is refreshed. It may have been a
+ * timeout, or the site may since have published an icon, and unlike a hit there
+ * is nothing on screen in the meantime.
+ */
+const RETRY_MISS_AFTER_MS = 1000 * 60 * 60 * 24 * 7;
+
 /** An empty dataUri records "looked, found nothing" so it is not re-probed. */
 export function cacheIcon(domain: string, dataUri: string): void {
   fetchedIcons.set(domain.toLowerCase(), JSON.stringify({ uri: dataUri, at: Date.now() }));
@@ -112,9 +119,20 @@ export async function missingIcons(domains: string[]): Promise<string[]> {
   return domains.filter((domain) => {
     const key = domain.toLowerCase();
     if (iconCache.has(key)) return false;
+
     const fetched = readFetched(key);
-    return !fetched || Date.now() - fetched.at > REFRESH_AFTER_MS;
+    if (!fetched) return true;
+    const age = Date.now() - fetched.at;
+    return fetched.uri ? age > REFRESH_AFTER_MS : age > RETRY_MISS_AFTER_MS;
   });
+}
+
+/** How many of these have no icon at all, having been looked for and missed. */
+export function knownMisses(domains: string[]): number {
+  return domains.filter((domain) => {
+    const key = domain.toLowerCase();
+    return !iconCache.has(key) && readFetched(key)?.uri === "";
+  }).length;
 }
 
 /** hostname and registrable domain -> icon id. Ids only; blobs on demand. */
