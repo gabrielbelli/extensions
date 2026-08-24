@@ -4,6 +4,14 @@ import psl from "psl";
 import { cacheIcon, knownMisses, missingIcons } from "./browser-data";
 
 const CONCURRENCY = 6;
+
+/**
+ * Raycast stops a background command that runs too long, and a large vault can
+ * leave a hundred sites to probe at several seconds each. Bounding the batch
+ * means a run always finishes and reports honestly; running it again picks up
+ * where it left off.
+ */
+const MAX_PER_RUN = 30;
 const TIMEOUT_MS = 5000;
 // Multi-resolution .ico files are routinely larger than they look: a 200 KB cap
 // rejected real icons at 285 KB. Still bounded, because these are embedded as
@@ -15,13 +23,23 @@ const ICON_LINK = /<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]*>/gi;
 const HREF = /href=["']([^"']+)["']/i;
 const SIZES = /sizes=["'](\d+)/i;
 
+/** The first failure that was not simply "this site has no icon". */
+let lastError: string | undefined;
+
 async function get(url: string): Promise<Response | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await fetch(url, { signal: controller.signal, redirect: "follow" });
     return response.ok ? response : undefined;
-  } catch {
+  } catch (error) {
+    // A timeout or a refused connection is ordinary. Anything else is worth
+    // reporting: swallowing every error made a broken run look like a run where
+    // no site happened to have an icon.
+    const message = error instanceof Error ? error.message : String(error);
+    if (!lastError && !/abort|ENOTFOUND|ECONNREFUSED|certificate|fetch failed/i.test(message)) {
+      lastError = message;
+    }
     return undefined;
   } finally {
     clearTimeout(timer);
@@ -92,7 +110,9 @@ export default async function Command() {
 
   // Credentials are stored against app identifiers too ("telegram.messenger"),
   // which are not hostnames and would each burn a connection timeout.
-  const domains = (await missingIcons(known)).filter((d) => psl.isValid(d));
+  const outstanding = (await missingIcons(known)).filter((d) => psl.isValid(d));
+  const domains = outstanding.slice(0, MAX_PER_RUN);
+  const remaining = outstanding.length - domains.length;
   if (!domains.length) {
     // "Nothing to fetch" is not the same as "everything has an icon": a site
     // that was checked and had none stays blank until it is worth retrying.
@@ -128,4 +148,6 @@ export default async function Command() {
 
   toast.style = found ? Toast.Style.Success : Toast.Style.Failure;
   toast.title = `${found} of ${domains.length} icon${domains.length === 1 ? "" : "s"} fetched`;
+  if (remaining > 0) toast.message = `${remaining} more to go — run this again`;
+  if (!found && lastError) toast.message = lastError;
 }
