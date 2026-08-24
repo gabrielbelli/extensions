@@ -22,6 +22,7 @@ import {
   getActiveURL,
   getAPWEntry,
   searchAPWEntries,
+  hostKey,
   PREFERENCES,
   searchIndex,
 } from "./utils";
@@ -82,10 +83,6 @@ const renderAction = (
   );
 };
 
-/** The hostname a row represents, which is what its icon should reflect. */
-const iconKey = (entry: { domain: string; sites?: string[] }): string =>
-  (entry.sites?.find((s) => s && !s.includes(":")) ?? entry.domain ?? "").toLowerCase();
-
 const renderItem = (entry: APWEntry, pasteTarget?: string, index = 0, icon: Image.ImageLike = Icon.PersonCircle) => {
   const accessories = [];
   const actions = [];
@@ -132,7 +129,7 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
   // Icons come from the browser's own favicon cache. Asking a favicon service
   // instead would disclose the user's account list to a third party.
   useEffect(() => {
-    const wanted = [...new Set([...data.map(iconKey), ...indexResults.map(iconKey)])].filter(Boolean);
+    const wanted = [...new Set([...data.map(hostKey), ...indexResults.map(hostKey)])].filter(Boolean);
     if (!wanted.length) return;
     let active = true;
     favicons(wanted)
@@ -144,7 +141,7 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
   }, [data, indexResults]);
 
   const iconFor = (entry: { domain: string; sites?: string[] }, fallback: Image.ImageLike): Image.ImageLike => {
-    const uri = icons.get(iconKey(entry));
+    const uri = icons.get(hostKey(entry));
     return uri ? { source: uri } : fallback;
   };
 

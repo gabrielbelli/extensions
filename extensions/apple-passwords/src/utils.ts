@@ -87,14 +87,20 @@ function mergeToIndex(entries: APWIndexEntry[]): void {
 }
 
 /** Distinct domains already known from lookups, used to scope icon fetching. */
+/**
+ * The hostname a row represents, and the key its icon is stored under.
+ *
+ * Shared with the list view on purpose: keying icons here on the registrable
+ * domain while the view looked them up by host meant a fetched icon was cached
+ * under a name nothing ever asked for.
+ */
+export function hostKey(entry: { domain?: string; sites?: string[] }): string {
+  return (entry.sites?.find((site) => site && !site.includes(":")) ?? entry.domain ?? "").toLowerCase();
+}
+
+/** Hostnames worth having an icon for, keyed as the view looks them up. */
 export function indexedDomains(): string[] {
-  return [
-    ...new Set(
-      readIndex()
-        .map((e) => e.domain?.toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
+  return [...new Set(readIndex().map(hostKey).filter(Boolean))];
 }
 
 /**
