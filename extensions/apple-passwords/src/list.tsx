@@ -234,31 +234,24 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.List }
       {data.map((entry, i) => renderItem(entry, pasteTarget, i, iconFor(entry, Icon.PersonCircle)))}
       {data.length === 0 && indexResults.length > 0 && (
         <List.Section title="Seen before">
-          {indexResults.map((e, i) => (
-            <List.Item
-              key={`idx-${i}`}
-              title={e.title ?? e.username}
-              subtitle={e.title ? `${e.username} · ${e.domain}` : e.domain}
-              icon={iconFor(e, Icon.MagnifyingGlass)}
-              accessories={[
-                ...(e.hasOtp ? [{ tag: { value: "OTP", color: Color.Green } }] : []),
-                { icon: { source: Icon.Key, tintColor: Color.Blue } },
-              ]}
-              actions={
-                <ActionPanel>
-                  <Action
-                    title={`Search ${e.domain}`}
-                    icon={Icon.MagnifyingGlass}
-                    onAction={() => {
-                      setSearchTxt(e.domain);
-                      setIndexResults([]);
-                      setUrl(e.domain);
-                    }}
-                  />
-                </ActionPanel>
-              }
-            />
-          ))}
+          {indexResults.map((e, i) =>
+            // Rendered exactly like a live row: a remembered account still has
+            // a username and a host, which is all copying one needs. Offering
+            // only "search this domain" made picking an account a detour back
+            // to the search that had just been done.
+            renderItem(
+              {
+                domain: hostKey(e) || e.domain,
+                username: e.username,
+                title: e.title,
+                sites: e.sites,
+                hasOtp: e.hasOtp,
+              },
+              pasteTarget,
+              i,
+              iconFor(e, Icon.PersonCircle),
+            ),
+          )}
         </List.Section>
       )}
       {!loading && searchTxt.trim() !== "" && data.length === 0 && indexResults.length === 0 && (
