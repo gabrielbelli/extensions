@@ -1,7 +1,9 @@
-Search Apple Passwords from Raycast using the local `applepw` CLI.
+Search Apple Passwords from Raycast, through the local `apw` CLI.
 
-Apple Password lets you search by domain or email fragment, copy passwords, copy one-time codes, and authenticate inline when the Apple Passwords daemon needs a code.
+Look a site up by a plain word rather than its full domain, copy passwords and one-time codes, and pair with the Apple Passwords helper inline when it asks for a code.
 
-The extension keeps search fast with a local password cache that stores only non-secret metadata such as domains, usernames, OTP availability, and timestamps. Passwords and one-time codes are never written to disk by the extension.
+Typing an address instead of a site searches accounts: `@example.com` lists every account on that address domain, and `me@example.com` finds that one.
 
-You can also import an Apple Passwords CSV export to improve search coverage without storing password values in the cache.
+Each result carries its own site icon, read from the local favicon cache of the browser `apw` already drives. Where the browser has none, the icon is fetched from that site directly, so no third party is told which sites you hold an account with.
+
+Accounts you have looked up are remembered locally — domains, usernames, whether a one-time code exists, and when each was last seen. Passwords and one-time codes are never written to disk by the extension.

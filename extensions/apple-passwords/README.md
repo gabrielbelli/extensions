@@ -12,6 +12,27 @@ brew install bendews/tap/apw
 brew services start apw
 ```
 
+## Searching
+
+`apw` answers questions about one site at a time, so a site has to be searched
+by its full hostname once. After that it is remembered and the short form works:
+
+- `github` finds an account stored against `github.com`
+- `grafana` finds a service on your own domain, without also returning every
+  other service sharing it
+
+An `@` searches accounts rather than sites. `@example.com` lists every account
+on that address domain; `me@example.com` finds that one.
+
+Each result shows its own site icon, read from the favicon cache of the browser
+`apw` already runs. Where the browser has none, it is fetched from that site
+directly as the result is shown — never from a favicon service, which would
+otherwise be told every domain you hold an account with.
+
+Accounts you look up are remembered locally so the short form keeps working:
+domains, usernames, whether a one-time code exists, and when each was last seen.
+Passwords and one-time codes are never written to disk.
+
 ## Commands
 
 ### Apple Passwords
